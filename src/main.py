@@ -1,7 +1,8 @@
 # src/main.py
 import os
+import sys
 import shutil
-from page_generator import generate_page
+from page_generator import generate_pages_recursive
 
 def copy_dir(src: str, dst: str) -> None:
     """
@@ -21,25 +22,28 @@ def copy_dir(src: str, dst: str) -> None:
             print(f"Copied: {s_path} -> {d_path}")
 
 def main():
+    # NEW: basepath from CLI or default "/"
+    basepath = sys.argv[1] if len(sys.argv) > 1 else "/"
+    
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    static_dir = os.path.join(project_root, "static")
-    public_dir = os.path.join(project_root, "public")
-    template_path = os.path.join(project_root, "template.html")
-    from_path = os.path.join(project_root, "content", "index.md")
-    dest_path = os.path.join(public_dir, "index.html")
+    static_dir   = os.path.join(project_root, "static")
+    docs_dir     = os.path.join(project_root, "docs")     # <— build to docs now
+    template     = os.path.join(project_root, "template.html")
+    content_dir  = os.path.join(project_root, "content")
 
-    # 1) Clean public
-    if os.path.exists(public_dir):
-        print(f"Removing: {public_dir}")
-        shutil.rmtree(public_dir)  # remove directory tree
+    # Clean docs for a fresh build
+    if os.path.exists(docs_dir):
+        print(f"Removing: {docs_dir}")
+        shutil.rmtree(docs_dir)
 
-    # 2) Copy static -> public
+    # Copy static -> docs  (your existing copy_dir function works fine)
     print("Copying static assets...")
-    copy_dir(static_dir, public_dir)
+    copy_dir(static_dir, docs_dir)
 
-    # 3) Generate content page
-    generate_page(from_path, template_path, dest_path)
-    print("✅ Build complete")
+    # Generate ALL pages from content -> docs with the basepath
+    generate_pages_recursive(content_dir, template, docs_dir, basepath)
+
+    print("✅ Build complete (docs/)")
 
 if __name__ == "__main__":
     main()

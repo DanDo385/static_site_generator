@@ -1,7 +1,16 @@
 # src/page_generator.py
 import os
 import re
+from pathlib import Path
 from markdown_to_html import markdown_to_html_node  # your earlier function
+
+def _normalize_basepath(base: str) -> str:
+    # Ensure starts and ends with a slash.  "/" -> "/" ; "myrepo" -> "/myrepo/"
+    if not base.startswith("/"):
+        base = "/" + base
+    if not base.endswith("/"):
+        base = base + "/"
+    return base
 
 def extract_title(markdown: str) -> str:
     """
@@ -15,30 +24,32 @@ def extract_title(markdown: str) -> str:
             return m.group(1).strip()
     raise ValueError("No H1 ('# ') title found in markdown")
 
-def generate_page(from_path: str, template_path: str, dest_path: str) -> None:
-    """
-    Read markdown and template files, convert markdown to HTML, inject
-    {{ Title }} and {{ Content }}, and write the full page to dest_path.
-    Creates parent directories as needed.
-    """
-    print(f"Generating page from {from_path} to {dest_path} using {template_path}")
+def generate_page(from_path: str, template_path: str, dest_path: str, basepath: str = "/") -> None:
+    base = _normalize_basepath(basepath)
+    print(f"Generating page from {from_path} to {dest_path} using {template_path} (base={base})")
 
-    # Read files
     with open(from_path, "r", encoding="utf-8") as f_md:
-        markdown = f_md.read()
+        md = f_md.read()
     with open(template_path, "r", encoding="utf-8") as f_tpl:
         template = f_tpl.read()
 
-    # Convert and extract title
-    html = markdown_to_html_node(markdown).to_html()
-    title = extract_title(markdown)
+    html = markdown_to_html_node(md).to_html()
+    title = extract_title(md)
 
-    # Inject into template
     page = template.replace("{{ Title }}", title).replace("{{ Content }}", html)
+    # IMPORTANT: rewrite ONLY root-absolute URLs to include the repo basepath
+    page = page.replace('href="/', f'href="{base}')
+    page = page.replace('src="/',  f'src="{base}')
 
-    # Ensure destination directory exists
     os.makedirs(os.path.dirname(dest_path), exist_ok=True)
-
-    # Write out the page
     with open(dest_path, "w", encoding="utf-8") as f_out:
         f_out.write(page)
+
+def generate_pages_recursive(dir_path_content: str, template_path: str, dest_dir_path: str, basepath: str = "/") -> None:
+    content_root = Path(dir_path_content)
+    dest_root    = Path(dest_dir_path)
+    for md_path in content_root.rglob("*.md"):
+        rel_md   = md_path.relative_to(content_root)      # e.g. blog/majesty/index.md
+        rel_html = rel_md.with_suffix(".html")            # -> blog/majesty/index.html
+        dest     = dest_root / rel_html                   # -> docs/blog/majesty/index.html
+        generate_page(str(md_path), template_path, str(dest), basepath)
